@@ -1,0 +1,53 @@
+@startuml despliegue-y-seguridad
+title Despliegue en VPS y superficie de ataque
+
+skinparam shadowing false
+
+cloud "Internet" as NET
+
+node "VPS (EasyPanel / Docker)" {
+  node "Proxy inverso (Traefik)" as PROXY {
+  }
+  node "ceats-frontend\n(Next.js)" as FRONT
+  node "ceats-backend\n(Next.js API)" as BACK
+  node "cEatsv2-intel\n(FastAPI + Python 3.12)" as INTEL #LightYellow
+  node "ws-service" as WS
+  node "whatsapp-service" as WA
+}
+
+cloud "Supabase (Postgres)" as DB
+
+NET --> PROXY : 443 TLS
+PROXY --> FRONT : dominio publico
+PROXY --> BACK  : dominio publico
+PROXY ..> INTEL : ##red : SIN dominio,\nSIN puerto publicado
+BACK --> INTEL : http://cEatsv2-intel:8000\n(red interna de Docker)
+INTEL --> BACK : https interno\n/api/internal/intel/*  (solo GET)
+BACK --> DB
+WS --> BACK
+WA --> BACK
+
+note right of INTEL
+  Controles:
+  1. Sin dominio ni puerto expuesto (solo red interna).
+  2. Contenedor no-root, rootfs de solo lectura.
+  3. Autentica cada peticion entrante con X-Intel-Key.
+  4. Sale solo hacia el backend, con INTEL_SERVICE_KEY
+     dedicada (distinta de API_SECRET_KEY).
+  5. Cero escrituras: solo GET al backend.
+  6. Cero PII en memoria, en cache y en logs.
+  7. Sin base de datos propia ni volumenes persistentes.
+  8. Timeout + circuit breaker; falla cerrado hacia afuera
+     y degradado hacia el checkout.
+end note
+
+note bottom of BACK
+  Endpoint nuevo /api/internal/intel/ventas:
+  - Bearer + comparacion en tiempo constante
+  - rate limit propio
+  - proyeccion despersonalizada (IDs, cantidades,
+    montos, timestamps). Nada de telefono, nombre,
+    direccion, CLABE ni datos de pago.
+end note
+
+@enduml

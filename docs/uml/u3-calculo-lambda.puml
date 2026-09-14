@@ -1,0 +1,98 @@
+@startuml u3-calculo-lambda
+' UNIDAD 3 — Calculo lambda: variables, funciones, aplicacion,
+' alpha-conversion, beta-reduccion, eta-conversion.
+title Unidad 3 — Nucleo de calculo lambda y pipeline funcional de scoring
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+hide empty members
+
+package "domain.lambdacalc" <<Frame>> {
+  abstract class Termino <<abstract>> {
+    + {abstract} variables_libres() : set<str>
+    + {abstract} sustituir(variable: str, por: Termino) : Termino
+    + {abstract} __str__() : str
+  }
+
+  class Var {
+    - _nombre : str
+    + variables_libres() : set<str>
+    + sustituir(variable, por) : Termino
+  }
+
+  class Abs <<lambda x . cuerpo>> {
+    - _parametro : str
+    - _cuerpo : Termino
+    + variables_libres() : set<str>
+    + sustituir(variable, por) : Termino
+    + alfa_renombrar(nuevo: str) : Abs
+  }
+
+  class App <<(f a)>> {
+    - _funcion : Termino
+    - _argumento : Termino
+    + variables_libres() : set<str>
+    + sustituir(variable, por) : Termino
+  }
+
+  class Evaluador {
+    - _max_pasos : int
+    + alfa_convertir(t: Abs, nuevo: str) : Abs
+    + beta_reducir(t: Termino) : Termino
+    + eta_reducir(t: Termino) : Termino
+    + forma_normal(t: Termino) : Termino
+    - _generar_nombre_fresco(usados: set<str>) : str
+  }
+
+  class Parser {
+    + parsear(fuente: str) : Termino
+  }
+
+  class LimiteReduccionError <<exception>>
+}
+
+Termino <|-- Var
+Termino <|-- Abs
+Termino <|-- App
+Abs *-- Termino : cuerpo
+App *-- "2" Termino : funcion / argumento
+Evaluador ..> Termino : reduce >
+Evaluador ..> LimiteReduccionError : lanza >
+Parser ..> Termino : construye >
+
+package "domain.scoring" <<Frame>> {
+  class PipelineScoring <<funcional>> {
+    - _etapas : list<Callable>
+    + then(f: Callable) : PipelineScoring
+    + aplicar(candidatos: list<Candidato>) : list<Candidato>
+    + {static} identidad() : PipelineScoring
+  }
+
+  class Combinadores <<utility>> {
+    + {static} escalar(factor: float) : Callable
+    + {static} penalizar_repetidos(canasta: Canasta) : Callable
+    + {static} diversificar_por_categoria(n: int) : Callable
+    + {static} filtrar_inactivos() : Callable
+    + {static} top_n(n: int) : Callable
+    + {static} componer(f: Callable, g: Callable) : Callable
+  }
+}
+
+PipelineScoring ..> Combinadores : usa >
+PipelineScoring ..> Candidato
+
+note bottom of Evaluador
+  3.2 alpha: renombra ligadas para evitar captura de variables.
+  3.3 beta : (lambda x . M) N  ->  M[x := N], orden normal.
+  3.4 eta  : (lambda x . f x) -> f  cuando x no es libre en f.
+  Seguridad: nunca se usa eval/exec. El AST es propio y el
+  evaluador corta en _max_pasos para no colgarse con Omega.
+end note
+
+note right of PipelineScoring
+  El pipeline es composicion de funciones puras:
+  score = top_n(4) . diversificar . penalizar . escalar
+  Equivale a beta-reduccion aplicada al dominio del negocio.
+end note
+
+@enduml

@@ -1,0 +1,128 @@
+@startuml u1-clases-dominio
+' UNIDAD 1 — Fundamentos de POO: clases, atributos, constructores,
+' encapsulacion, modularidad y relaciones basicas.
+title Unidad 1 - Modelo de dominio de cEatsv2-intel
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+hide empty members
+
+package "domain.valueobjects" <<Frame>> {
+  class ProductoId <<value object>> {
+    - _valor : str
+    + ProductoId(valor: str)
+    + valor() : str
+    + __eq__(otro: object) : bool
+    + __hash__() : int
+  }
+
+  class SucursalId <<value object>> {
+    - _valor : str
+    + SucursalId(valor: str)
+    + valor() : str
+  }
+
+  class Dinero <<value object>> {
+    - _centavos : int
+    - _moneda : str
+    + Dinero(centavos: int, moneda: str = "MXN")
+    + desde_pesos(pesos: float) : Dinero
+    + a_pesos() : float
+    + mas(otro: Dinero) : Dinero
+    + por(factor: float) : Dinero
+  }
+
+  class VentanaTemporal <<value object>> {
+    - _desde : datetime
+    - _hasta : datetime
+    + VentanaTemporal(desde: datetime, hasta: datetime)
+    + dias() : int
+    + contiene(momento: datetime) : bool
+  }
+}
+
+package "domain.entidades" <<Frame>> {
+  class Producto {
+    - _id : ProductoId
+    - _nombre : str
+    - _precio : Dinero
+    - _categoria : str
+    - _tiene_modificadores : bool
+    - _activo : bool
+    + Producto(id, nombre, precio, categoria, tiene_modificadores, activo)
+    + id() : ProductoId
+    + nombre() : str
+    + precio() : Dinero
+    + es_sugerible() : bool
+    + margen_estimado(costo: Dinero) : float
+  }
+
+  class LineaPedido {
+    - _producto_id : ProductoId
+    - _cantidad : int
+    - _precio_unitario : Dinero
+    + LineaPedido(producto_id, cantidad, precio_unitario)
+    + subtotal() : Dinero
+    + cantidad() : int
+  }
+
+  class Pedido {
+    - _id : str
+    - _sucursal_id : SucursalId
+    - _creado_en : datetime
+    - _lineas : list<LineaPedido>
+    + Pedido(id, sucursal_id, creado_en, lineas)
+    + total() : Dinero
+    + productos() : set<ProductoId>
+    + hora_del_dia() : int
+    + dia_semana() : int
+  }
+
+  class Canasta {
+    - _sucursal_id : SucursalId
+    - _productos : set<ProductoId>
+    + Canasta(sucursal_id, productos)
+    + contiene(pid: ProductoId) : bool
+    + vacia() : bool
+  }
+
+  class Sucursal {
+    - _id : SucursalId
+    - _nombre : str
+    - _zona_horaria : str
+    + Sucursal(id, nombre, zona_horaria)
+  }
+
+  class HistorialVentas <<aggregate root>> {
+    - _sucursal_id : SucursalId
+    - _ventana : VentanaTemporal
+    - _pedidos : list<Pedido>
+    + HistorialVentas(sucursal_id, ventana, pedidos)
+    + total_pedidos() : int
+    + frecuencia(pid: ProductoId) : int
+    + co_ocurrencias() : dict<tuple, int>
+    + serie_por_hora() : list<int>
+  }
+}
+
+Pedido "1" *-- "1..*" LineaPedido : compone >
+Pedido --> SucursalId
+LineaPedido --> ProductoId
+LineaPedido --> Dinero
+Producto --> ProductoId
+Producto --> Dinero
+Canasta --> SucursalId
+Canasta o-- ProductoId
+Sucursal --> SucursalId
+HistorialVentas "1" o-- "0..*" Pedido : agrega >
+HistorialVentas --> VentanaTemporal
+HistorialVentas --> SucursalId
+
+note bottom of HistorialVentas
+  Encapsulacion: todos los atributos son privados (_x).
+  El estado solo se modifica por constructor; las
+  colecciones se devuelven como copias inmutables
+  para evitar aliasing por referencia (tema 1.6).
+end note
+
+@enduml

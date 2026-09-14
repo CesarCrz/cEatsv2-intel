@@ -1,0 +1,51 @@
+@startuml secuencia-recomendacion
+title Secuencia — checkout pide upsell (camino feliz y degradado)
+
+skinparam shadowing false
+autonumber
+
+actor Cliente
+participant "Frontend cEats\n(Next.js)" as FE
+participant "Backend cEats\n(Next.js API)" as BE
+participant "cEatsv2-intel\n(FastAPI, red interna)" as INTEL
+database "Supabase\n(Postgres)" as DB
+
+Cliente -> FE : agrega productos al carrito
+FE -> BE : POST /api/upsell/sugerencias\n(cookie de sesion + menu_session_token)
+activate BE
+
+BE -> BE : valida sesion, resuelve restaurante_id
+BE -> INTEL : POST /v1/recomendaciones\nX-Intel-Key: <secreto interno>\n{sucursal_id, canasta[], modo, limite}
+activate INTEL
+
+INTEL -> BE : GET /api/internal/intel/ventas\nAuthorization: Bearer <INTEL_SERVICE_KEY>\n(solo IDs, cantidades, montos, fechas)
+activate BE
+BE -> DB : select despersonalizado de pedido_items
+DB --> BE : filas sin PII
+BE --> INTEL : 200 {ventas: [...]} (sin telefono/nombre/direccion)
+deactivate BE
+
+INTEL -> INTEL : HistorialVentas -> EstrategiaRecomendacion\n-> PipelineScoring (lambda)
+INTEL --> BE : 200 {sugerencias: [...], origen}
+deactivate INTEL
+
+BE -> DB : enriquece con nombre, precio, imagen, modificadores
+BE --> FE : 200 {sugerencias enriquecidas}
+deactivate BE
+FE --> Cliente : interstitial de upsell
+
+group Degradacion segura (timeout, 5xx o circuito abierto)
+  BE -> INTEL : POST /v1/recomendaciones
+  INTEL --> BE : timeout / 503
+  BE -> BE : fallback al resolver TS actual\n(upsell.service.ts)
+  BE --> FE : 200 {sugerencias: fallback}
+end
+
+note over INTEL
+  El micro nunca escribe.
+  Nunca recibe PII.
+  No esta publicado en internet:
+  solo la red interna del VPS lo alcanza.
+end note
+
+@enduml

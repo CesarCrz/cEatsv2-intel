@@ -1,0 +1,137 @@
+@startuml u2-herencia-polimorfismo
+' UNIDAD 2 — Abstraccion, herencia, polimorfismo, clases abstractas,
+' sobrecarga y manejo de colecciones.
+title Unidad 2 — Jerarquias polimorficas: recomendacion, pronostico y analitica
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+hide empty members
+
+package "domain.recomendacion" <<Frame>> {
+  abstract class EstrategiaRecomendacion <<abstract>> {
+    # _nombre : str
+    # _peso : float
+    + EstrategiaRecomendacion(nombre: str, peso: float)
+    + {abstract} candidatos(historial: HistorialVentas, canasta: Canasta) : list<Candidato>
+    + {abstract} origen() : OrigenSugerencia
+    + puntuar(historial, canasta, limite: int) : list<Candidato>
+    + __str__() : str
+  }
+
+  class CoOcurrenciaStrategy {
+    - _soporte_minimo : int
+    + candidatos(historial, canasta) : list<Candidato>
+    + origen() : OrigenSugerencia
+    - _lift(a: ProductoId, b: ProductoId) : float
+    - _confianza(a: ProductoId, b: ProductoId) : float
+  }
+
+  class PopularidadStrategy {
+    - _ventana_dias : int
+    + candidatos(historial, canasta) : list<Candidato>
+    + origen() : OrigenSugerencia
+  }
+
+  class ReglasManualesStrategy {
+    - _reglas : list<ReglaUpsell>
+    + candidatos(historial, canasta) : list<Candidato>
+    + origen() : OrigenSugerencia
+  }
+
+  class HibridaStrategy <<composite>> {
+    - _hijas : list<EstrategiaRecomendacion>
+    + agregar(estrategia: EstrategiaRecomendacion) : None
+    + candidatos(historial, canasta) : list<Candidato>
+    + origen() : OrigenSugerencia
+  }
+
+  class Candidato {
+    - _producto_id : ProductoId
+    - _score : float
+    - _origen : OrigenSugerencia
+    + con_score(nuevo: float) : Candidato
+  }
+
+  enum OrigenSugerencia {
+    MANUAL
+    CO_OCURRENCIA
+    POPULARIDAD
+    FALLBACK
+  }
+}
+
+EstrategiaRecomendacion <|-- CoOcurrenciaStrategy
+EstrategiaRecomendacion <|-- PopularidadStrategy
+EstrategiaRecomendacion <|-- ReglasManualesStrategy
+EstrategiaRecomendacion <|-- HibridaStrategy
+HibridaStrategy o-- "1..*" EstrategiaRecomendacion : delega >
+EstrategiaRecomendacion ..> Candidato : produce >
+Candidato --> OrigenSugerencia
+
+package "domain.pronostico" <<Frame>> {
+  abstract class ModeloPronostico <<abstract>> {
+    # _horizonte : int
+    + {abstract} entrenar(serie: list<float>) : None
+    + {abstract} predecir(pasos: int) : list<float>
+    + error_absoluto_medio(real: list<float>) : float
+  }
+
+  class MediaMovilModelo {
+    - _ventana : int
+    + entrenar(serie) : None
+    + predecir(pasos) : list<float>
+  }
+
+  class EstacionalSemanalModelo {
+    - _perfil_dia : dict<int, float>
+    + entrenar(serie) : None
+    + predecir(pasos) : list<float>
+  }
+
+  class RegresionLinealModelo {
+    - _pendiente : float
+    - _intercepto : float
+    + entrenar(serie) : None
+    + predecir(pasos) : list<float>
+  }
+}
+
+ModeloPronostico <|-- MediaMovilModelo
+ModeloPronostico <|-- EstacionalSemanalModelo
+ModeloPronostico <|-- RegresionLinealModelo
+
+package "domain.analitica" <<Frame>> {
+  abstract class ClasificadorMenu <<abstract>> {
+    + {abstract} clasificar(historial: HistorialVentas) : dict<ProductoId, Cuadrante>
+  }
+  class MenuEngineeringClasificador
+  class ClasificacionABC
+
+  enum Cuadrante {
+    ESTRELLA
+    CABALLO
+    PUZZLE
+    PERRO
+  }
+
+  class DetectorAnomalias {
+    - _umbral_z : float
+    + detectar(serie: list<float>) : list<Anomalia>
+  }
+}
+
+ClasificadorMenu <|-- MenuEngineeringClasificador
+ClasificadorMenu <|-- ClasificacionABC
+MenuEngineeringClasificador ..> Cuadrante
+
+note right of EstrategiaRecomendacion
+  Polimorfismo (2.3): el caso de uso solo conoce el tipo
+  abstracto. Sobrecarga (2.1): `puntuar` acepta limite
+  opcional via @singledispatchmethod / valores por defecto.
+  Ciclo de vida (2.4): las estrategias se crean por peticion
+  y se descartan; el historial se cachea con TTL.
+  Colecciones (2.5): dict<tuple,int> para co-ocurrencias,
+  set<ProductoId> para la canasta, heapq para top-N.
+end note
+
+@enduml

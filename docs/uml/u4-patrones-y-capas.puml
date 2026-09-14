@@ -1,0 +1,100 @@
+@startuml u4-patrones-y-capas
+' UNIDAD 4 — Arquitectura de capas y patrones de diseno aplicados.
+title Unidad 4 — Arquitectura por capas y patrones de diseno
+
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "api (presentacion)" <<Frame>> {
+  class RouterRecomendaciones
+  class RouterPronostico
+  class RouterAnalitica
+  class DTOs <<pydantic>>
+  class DependenciaAutenticacion <<seguridad>>
+}
+
+package "application (casos de uso)" <<Frame>> {
+  class GenerarRecomendacionesUseCase {
+    + ejecutar(peticion: PeticionRecomendacion) : RespuestaRecomendacion
+  }
+  class PronosticarDemandaUseCase
+  class ClasificarMenuUseCase
+  class DetectarAnomaliasUseCase
+  class FabricaEstrategias <<factory>> {
+    + crear(modo: ModoUpsell) : EstrategiaRecomendacion
+  }
+  class RecomendacionBuilder <<builder>> {
+    + con_limite(n: int) : RecomendacionBuilder
+    + con_pipeline(p: PipelineScoring) : RecomendacionBuilder
+    + construir() : RespuestaRecomendacion
+  }
+}
+
+package "domain (POO puro)" <<Frame>> {
+  abstract class EstrategiaRecomendacion <<strategy>>
+  abstract class ModeloPronostico <<strategy>>
+  interface RepositorioVentas <<port>> {
+    + historial(sucursal_id: SucursalId, ventana: VentanaTemporal) : HistorialVentas
+  }
+  interface RepositorioCatalogo <<port>> {
+    + productos(sucursal_id: SucursalId) : list<Producto>
+  }
+  class PipelineScoring
+}
+
+package "infrastructure (adaptadores)" <<Frame>> {
+  class ClienteBackendCEats <<adapter>> {
+    - _base_url : str
+    - _clave : SecretStr
+    - _timeout : float
+    + obtener_ventas(...) : list<dict>
+    + obtener_catalogo(...) : list<dict>
+  }
+  class RepositorioVentasHTTP
+  class RepositorioCatalogoHTTP
+  class RepositorioCacheado <<decorator>> {
+    - _interno : RepositorioVentas
+    - _ttl : int
+  }
+  class CircuitBreaker <<decorator>>
+  class Config <<singleton>>
+  class RegistroMetricas <<observer>>
+}
+
+RouterRecomendaciones --> GenerarRecomendacionesUseCase
+RouterPronostico --> PronosticarDemandaUseCase
+RouterAnalitica --> ClasificarMenuUseCase
+RouterAnalitica --> DetectarAnomaliasUseCase
+RouterRecomendaciones ..> DependenciaAutenticacion
+RouterRecomendaciones ..> DTOs
+
+GenerarRecomendacionesUseCase --> FabricaEstrategias
+GenerarRecomendacionesUseCase --> RecomendacionBuilder
+GenerarRecomendacionesUseCase --> RepositorioVentas
+GenerarRecomendacionesUseCase --> PipelineScoring
+FabricaEstrategias ..> EstrategiaRecomendacion : crea >
+PronosticarDemandaUseCase --> ModeloPronostico
+
+RepositorioVentasHTTP ..|> RepositorioVentas
+RepositorioCatalogoHTTP ..|> RepositorioCatalogo
+RepositorioCacheado ..|> RepositorioVentas
+RepositorioCacheado o-- RepositorioVentas : envuelve >
+RepositorioVentasHTTP --> ClienteBackendCEats
+RepositorioCatalogoHTTP --> ClienteBackendCEats
+ClienteBackendCEats --> CircuitBreaker
+ClienteBackendCEats --> Config
+GenerarRecomendacionesUseCase ..> RegistroMetricas : notifica >
+
+note bottom
+  Regla de dependencias: api -> application -> domain.
+  infrastructure implementa los puertos del dominio.
+  El dominio no importa FastAPI, httpx ni nada de red:
+  es POO pura y testeable sin servidor (tema 1.7 y 4.1).
+
+  Patrones usados: Strategy, Composite, Factory Method,
+  Builder, Repository (Port/Adapter), Decorator,
+  Observer, Singleton de configuracion, DTO/Mapper.
+end note
+
+@enduml
