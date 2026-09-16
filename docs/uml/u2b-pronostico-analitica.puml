@@ -1,0 +1,61 @@
+@startuml u2b-pronostico-analitica
+' UNIDAD 2 - Abstraccion, herencia, polimorfismo, clases abstractas,
+' sobrecarga y manejo de colecciones.
+title Unidad 2 (b) - Pronostico y analitica
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+hide empty members
+
+package "domain.pronostico" <<Frame>> {
+  abstract class ModeloPronostico <<abstract>> {
+    # _nombre : str
+    # _entrenado : bool
+    + {abstract} _ajustar(serie) : None
+    + {abstract} _predecir_paso(i) : float
+    + entrenar(serie) : ModeloPronostico
+    + predecir(pasos = 1) : list<float>
+    + {static} error_absoluto_medio(real, predicho) : float
+  }
+  class MediaMovilModelo
+  class EstacionalSemanalModelo
+  class RegresionLinealModelo
+}
+
+ModeloPronostico <|-- MediaMovilModelo
+ModeloPronostico <|-- EstacionalSemanalModelo
+ModeloPronostico <|-- RegresionLinealModelo
+
+package "domain.analitica" <<Frame>> {
+  abstract class ClasificadorMenu <<abstract>> {
+    + {abstract} clasificar(historial, catalogo) : dict
+  }
+  class MenuEngineeringClasificador
+  enum Cuadrante {
+    ESTRELLA
+    CABALLO
+    PUZZLE
+    PERRO
+  }
+  class DetectorAnomalias {
+    - _umbral : float
+    + detectar(serie) : list<Anomalia>
+  }
+  class Anomalia
+}
+
+ClasificadorMenu <|-- MenuEngineeringClasificador
+MenuEngineeringClasificador ..> Cuadrante
+DetectorAnomalias ..> Anomalia
+
+note as N1
+  Colecciones (2.5): dict para la matriz de co-ocurrencia,
+  frozenset para la canasta, heapq para el top-N y Counter
+  para las frecuencias.
+
+  Ciclo de vida (2.4): las estrategias se crean por peticion
+  y se descartan. El historial se reusa desde una cache con
+  tiempo de vida.
+end note
+
+@enduml

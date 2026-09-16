@@ -1,0 +1,157 @@
+@startuml u2a-estrategias
+' UNIDAD 2 - Abstraccion, herencia, polimorfismo, clases abstractas,
+' sobrecarga y manejo de colecciones.
+title Unidad 2 (a) - Jerarquia de estrategias de recomendacion
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+hide empty members
+
+package "domain.recomendacion" <<Frame>> {
+
+  class ContextoRecomendacion <<parameter object>> {
+    + canasta : Canasta
+    + historial : HistorialVentas
+    + catalogo : Catalogo
+    + historial_restaurante : HistorialVentas
+    + alfa : float
+    + con_historial(h) : ContextoRecomendacion
+  }
+
+  abstract class EstrategiaRecomendacion <<abstract>> {
+    # _nombre : str
+    # _peso : float
+    + {abstract} candidatos(ctx) : list<Candidato>
+    + {abstract} origen() : OrigenSugerencia
+    + {abstract} nivel() : NivelRespaldo
+    + puntuar(ctx, limite = 4) : list<Candidato>
+  }
+
+  note right of EstrategiaRecomendacion
+    `puntuar` es metodo plantilla: aplica el peso,
+    quita lo que ya trae el cliente, quita los
+    descartados y recorta al top-N. Las subclases
+    solo dicen como puntuar.
+  end note
+
+  class CoOcurrenciaStrategy {
+    - _lift_minimo : float
+    - _nivel : NivelRespaldo
+    + candidatos(ctx) : list<Candidato>
+  }
+
+  class AfinidadCategoriaStrategy
+  class PopularidadStrategy
+  class ReglasManualesStrategy
+  class DestacadosStrategy
+
+  class HibridaStrategy <<composite>> {
+    - _hijas : list<EstrategiaRecomendacion>
+    + agregar(e) : HibridaStrategy
+  }
+
+  class CascadaStrategy <<composite>> {
+    - _escalones : tuple
+    - _objetivo : int
+    - _ultimo_nivel : NivelRespaldo
+    - {static} _score_en_banda(score, nivel) : float
+  }
+
+  class Candidato <<immutable>> {
+    - _producto_id : ProductoId
+    - _score : float
+    - _origen : OrigenSugerencia
+    - _nivel : NivelRespaldo
+    - _evidencia : Evidencia
+    - _descarte : str
+    + con_score(nuevo) : Candidato
+    + descartar(motivo) : Candidato
+    + clave_orden() : tuple
+  }
+
+  class Evidencia {
+    + juntos : int
+    + frecuencia_ancla : int
+    + soporte_candidato : float
+    + confianza : float
+    + lift : float
+    + confianza_estadistica() : Confianza
+  }
+
+  class ReglaUpsell {
+    + id : str
+    + disparador : ProductoId
+    + sugerido : ProductoId
+    + prioridad : int
+  }
+
+  enum OrigenSugerencia {
+    MANUAL
+    CO_OCURRENCIA
+    AFINIDAD_CATEGORIA
+    POPULARIDAD
+    DESTACADO
+  }
+
+  enum NivelRespaldo {
+    SUCURSAL = 1
+    RESTAURANTE = 2
+    VENTANA_LARGA = 3
+    CATEGORIA = 4
+    POPULAR_SUCURSAL = 5
+    POPULAR_RESTAURANTE = 6
+    DESTACADOS = 7
+  }
+}
+
+EstrategiaRecomendacion <|-- CoOcurrenciaStrategy
+EstrategiaRecomendacion <|-- AfinidadCategoriaStrategy
+EstrategiaRecomendacion <|-- PopularidadStrategy
+EstrategiaRecomendacion <|-- ReglasManualesStrategy
+EstrategiaRecomendacion <|-- DestacadosStrategy
+EstrategiaRecomendacion <|-- HibridaStrategy
+EstrategiaRecomendacion <|-- CascadaStrategy
+
+HibridaStrategy o-- "1..*" EstrategiaRecomendacion : delega >
+CascadaStrategy o-- "1..*" EstrategiaRecomendacion : escalones >
+EstrategiaRecomendacion ..> ContextoRecomendacion : recibe >
+EstrategiaRecomendacion ..> Candidato : produce >
+CoOcurrenciaStrategy ..> Evidencia : calcula >
+Candidato --> OrigenSugerencia
+Candidato --> NivelRespaldo
+Candidato o-- Evidencia
+ReglasManualesStrategy o-- "0..*" ReglaUpsell
+
+package "domain.catalogo" <<Frame>> {
+  class Catalogo {
+    - _productos : tuple
+    - _tipos : dict
+    + tipo_de(producto_id) : TipoCategoria
+    + tipos_que_acompanan(tipos) : tuple
+    + productos_de_tipo(tipo) : tuple
+    + destacados() : tuple
+  }
+  enum TipoCategoria {
+    ENTRADA
+    FUERTE
+    BEBIDA
+    POSTRE
+    EXTRA
+    DESCONOCIDO
+  }
+}
+
+AfinidadCategoriaStrategy ..> Catalogo : usa >
+Catalogo --> TipoCategoria
+
+note as N1
+  Colecciones (2.5): dict para la matriz de co-ocurrencia,
+  frozenset para la canasta, heapq para el top-N y Counter
+  para las frecuencias.
+
+  Ciclo de vida (2.4): las estrategias se crean por peticion
+  y se descartan. El historial se reusa desde una cache con
+  tiempo de vida.
+end note
+
+@enduml

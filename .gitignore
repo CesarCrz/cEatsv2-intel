@@ -14,3 +14,4 @@ docs/latex/*.fls
 docs/latex/*.fdb_latexmk
 docs/latex/*.pdf
 datos/*.csv
+plantuml.jar
