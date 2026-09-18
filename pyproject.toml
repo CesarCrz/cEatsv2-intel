@@ -41,3 +41,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 # en Pydantic v2 y en el JSON del contrato, y no quiero que un cambio de
 # base mueva la forma de la respuesta.
 ignore = ["UP042"]
+
+[tool.ruff.lint.per-file-ignores]
+# B008 se queja de llamar Depends()/Query() en el valor por defecto. En FastAPI
+# eso no es un descuido: es como se declaran las dependencias y los parametros.
+"src/ceats_intel/api/*" = ["B008"]
